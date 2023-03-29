@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 import os
 
 import logging
-from logging import StreamHandler
 from logging.handlers import RotatingFileHandler
 
 from http import HTTPStatus
@@ -37,6 +36,21 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename='program.log',
+    format='%(asctime)s, %(name)s,  %(levelname)s, %(message)s'
+)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=5)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def check_tokens() -> bool:
@@ -207,6 +221,18 @@ def main() -> None:
     if not check_tokens():
         sys.exit('Критическая ошибка. Отсутствуют переменные окружения.')
 
+    # valid_response = {
+    #     'homeworks': [{
+    #         'homework_name': 'hw123',
+    #         'status': 'approved'
+    #     }],
+    #         'current_date': 111111
+    #     }
+    # print('G')
+    # check_response(valid_response)
+    # print('end')
+
+
     bot: telegram.bot = telegram.Bot(token=TELEGRAM_TOKEN)
     prev_report: dict = {'name': '', 'output': ''}
     current_report: dict = {'name': '', 'output': ''}
@@ -243,23 +269,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.DEBUG,
-        filename='program.log',
-        format='%(asctime)s, %(name)s,  %(levelname)s, %(message)s'
-    )
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=5)
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    tele_logger = logging.getLogger(__name__)
-    tele_logger.setLevel(logging.DEBUG)
-    tele_handler = StreamHandler(stream=sys.stdout)
-    tele_logger.addHandler(tele_handler)
 
     main()
