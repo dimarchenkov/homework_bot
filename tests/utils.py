@@ -11,7 +11,7 @@ def check_function(scope: ModuleType, func_name: str, params_qty: int = 0):
     assert hasattr(scope, func_name), (
         f'Не найдена функция `{func_name}`. '
         'Не удаляйте и не переименовывайте её.'
-    )
+    ) 
 
     func = getattr(scope, func_name)
 

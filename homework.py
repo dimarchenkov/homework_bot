@@ -107,90 +107,79 @@ def get_api_answer(timestamp: int) -> dict:
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
-    response = {}
+    response: dict = {}
 
     try:
         logger.info(f'Отправляем запрос к API {ENDPOINT}')
         response: dict = requests.get(**request_params)
-        response.raise_for_status()
         if response.status_code == HTTPStatus.NOT_FOUND:
+            logger.error(
+                'Сбой в работе программы: '
+                f'Эндпоинт {ENDPOINT} недоступен. '
+                f'Код ответа API: {response.status_code}'
+            )
             raise HTTPStatusErrorNOT_FOUND()
         if response.status_code == HTTPStatus.BAD_REQUEST:
+            logger.error(
+                'Сбой в работе программы: '
+                f'Wrong from_date format. '
+                f'Код ответа API: {response.status_code}'
+            )
             raise HTTPStatusErrorBAD_REQUEST()
         if response.status_code == HTTPStatus.UNAUTHORIZED:
+            logger.error(
+                'Сбой в работе программы: '
+                f'Учетные данные не были предоставлены. '
+                f'Код ответа API: {response.status_code}'
+            )
             raise HTTPStatusErrorUNAUTHORIZED()
-
-    except HTTPStatusErrorNOT_FOUND:
-        logger.error(
-            'Сбой в работе программы: '
-            f'Эндпоинт {ENDPOINT} недоступен. '
-            f'Код ответа API: {response.status_code}'
-        )
-        response = {}
-        return response
-    except HTTPStatusErrorBAD_REQUEST:
-        logger.error(
-            'Сбой в работе программы: '
-            f'Wrong from_date format. '
-            f'Код ответа API: {response.status_code}'
-        )
-        response = {}
-        return response
-    except HTTPStatusErrorUNAUTHORIZED:
-        logger.error(
-            'Сбой в работе программы: '
-            f'Учетные данные не были предоставлены. '
-            f'Код ответа API: {response.status_code}'
-        )
-        response = {}
-        return response
+        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+            logger.error(
+                'Сбой в работе программы: '
+                f'Внутренняя ошибка сервера: {response.status_code}'
+            )
+            raise HTTPStatusErrorUNAUTHORIZED()
     except requests.exceptions.RequestException as error:
         logger.error(error)
     else:
         logger.info('Получен ответ от API')
+        a = response.json()
+        print(f'{response.json()}\n\n, {type(a)}\n\n')
         return response.json()
 
 
 def check_response(response) -> bool:
     """Check correct data in response."""
     logger.debug('Проверка ответа от сервера')
-    check_response = False
-    try:
-        if not isinstance(response, dict):
-            raise TypeError(
-                'Тип ответа API не соответствует ожидаемому dict.'
-                f' Полученный ответ: {response}.'
-            )
 
-        if not response:
-            raise ValueError(
-                'Словарь полученный от API пуст.'
-                f' Полученный ответ: {response}.'
-            )
+    if not isinstance(response, dict):
+        raise TypeError(
+            'Тип ответа API не соответствует ожидаемому dict.'
+            f' Полученный тип: {type(response)}.'
+        )
+    if not isinstance(response.get('homeworks'), list):
+        raise TypeError(
+            'Тип ответа API не соответствует ожидаемому list.'
+        )
+    if not response:
+        raise ValueError(
+            'Словарь полученный от API пуст.'
+            f' Полученный ответ: {response}.'
+        )
 
-        if 'homeworks' not in response:
-            raise HomeworkExistingKey(
-                'Ответ API не содержит ключа "homeworks".'
-                f' Полученный ответ: {response}.'
-            )
+    if 'homeworks' not in response:
+        raise HomeworkExistingKey(
+            'Ответ API не содержит ключа "homeworks".'
+            f' Полученный ответ: {response}.'
+        )
 
-        if 'current_date' not in response:
-            raise HomeworkExistingKey(
-                'Ответ API не содержит ключа "current_date".'
-                f' Полученный ответ: {response}.'
-            )
-    except TypeError as error:
-        logger.error(error)
-        return check_response
-    except ValueError as error:
-        logger.error(error)
-        return check_response
-    except HomeworkExistingKey as error:
-        logger.error(error)
-        return check_response
-    else:
-        logger.debug('Результат проверки: all good')
-        return True
+    if 'current_date' not in response:
+        raise HomeworkExistingKey(
+            'Ответ API не содержит ключа "current_date".'
+            f' Полученный ответ: {response}.'
+        )
+    logger.debug('Результат проверки: all good')
+    return True
 
 
 def parse_status(homework: dict) -> str:
@@ -205,6 +194,11 @@ def parse_status(homework: dict) -> str:
         f'homework_status: {homework_status}'
     )
 
+    if homework_name is None:
+        raise HomeworkStatusError(
+            f'Пустое имя домашней рабоыт {homework_name}'
+        )
+
     if homework_status not in HOMEWORK_VERDICTS:
         raise HomeworkStatusError(
             f'Неизвестный статус домашней рабоыт {homework_status}'
@@ -213,7 +207,7 @@ def parse_status(homework: dict) -> str:
 
     logger.debug(f'Проверка статуса завершена, вердикт - {verdict}')
 
-    return f'Изменился статус проверки работы {homework_name}: {verdict}'
+    return f'Изменился статус проверки работы "{homework_name}": {verdict}'
 
 
 def main() -> None:
@@ -222,14 +216,22 @@ def main() -> None:
         sys.exit('Критическая ошибка. Отсутствуют переменные окружения.')
 
     bot: telegram.bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    prev_report: dict = {'name': '', 'output': ''}
-    current_report: dict = {'name': '', 'output': ''}
+    prev_report: dict = {
+        'name': '',
+        'output': ''
+    }
+    current_report: dict = {
+        'name': '',
+        'output': ''
+    }
     timestamp = int(time.time())
 
     while True:
         try:
             response: list = get_api_answer(timestamp)
-            if check_response(response):
+            homework = response.get('homeworks')
+            print(response)
+            if check_response(response) and homework:
                 homework = response.get('homeworks')[0]
                 current_report = {
                     'name': homework.get('homework_name'),
@@ -244,7 +246,7 @@ def main() -> None:
             error_message = f"Сбой в работе программы: {error}"
             logging.exception(error_message)
             send_message(bot, error_message)
-        else:
+        finally:
             if prev_report != current_report:
                 logging.info(
                     'Подготовлено сообщение для отаравки:'
