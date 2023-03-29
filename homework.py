@@ -221,18 +221,6 @@ def main() -> None:
     if not check_tokens():
         sys.exit('Критическая ошибка. Отсутствуют переменные окружения.')
 
-    # valid_response = {
-    #     'homeworks': [{
-    #         'homework_name': 'hw123',
-    #         'status': 'approved'
-    #     }],
-    #         'current_date': 111111
-    #     }
-    # print('G')
-    # check_response(valid_response)
-    # print('end')
-
-
     bot: telegram.bot = telegram.Bot(token=TELEGRAM_TOKEN)
     prev_report: dict = {'name': '', 'output': ''}
     current_report: dict = {'name': '', 'output': ''}
