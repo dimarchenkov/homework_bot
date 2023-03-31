@@ -1,23 +1,16 @@
-from dotenv import load_dotenv
-import os
-
 import logging
-from logging.handlers import RotatingFileHandler
-
+import os
+import sys
+import time
 from http import HTTPStatus
+
 import requests
 import telegram
-import time
-import sys
+from dotenv import load_dotenv
 
-from exeptions import (
-    HomeworkStatusError,
-    HomeworkExistingKey,
-    HTTPStatusErrorNOT_FOUND,
-    HTTPStatusErrorBAD_REQUEST,
-    HTTPStatusErrorUNAUTHORIZED
-)
-
+from exeptions import (HomeworkExistingKey, HomeworkStatusError,
+                       HTTPStatusErrorBAD_REQUEST, HTTPStatusErrorNOT_FOUND,
+                       HTTPStatusErrorUNAUTHORIZED)
 
 load_dotenv()
 
@@ -38,54 +31,33 @@ HOMEWORK_VERDICTS = {
 }
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    filename='program.log',
-    format='%(asctime)s, %(name)s,  %(levelname)s, %(message)s'
-)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=5)
+handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    '%(asctime)s - %(levelname)s - %(funcName)s - %(lineno)d - %(message)s'
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
-def check_tokens() -> bool:
+def check_tokens() -> None:
     """Check tokens exists."""
-    check_status: bool = True
-
-    if not PRACTICUM_TOKEN:
-        logger.critical(
-            'Отсутствует обязательная переменная '
-            'окружения: PRACTICUM_TOKEN = None.'
-        )
-        check_status = False
+    logger.info('Проверка токенов')
+    check_status = True
+    check_list = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
+    for token in check_list:
+        if not globals()[token]:
+            logger.critical(
+                'Отсутствует обязательная переменная '
+                f'окружения: {token} = None.'
+            )
+            check_status = False
+    if not check_status:
+        logger.info(f'Проверка завершена с ошибкой: Статус: {check_status}')
+        sys.exit('Критическая ошибка. Отсутствуют переменные окружения.')
     else:
-        logger.debug(f'Check tokens - PRACTICUM_TOKEN: {check_status}')
-
-    if not TELEGRAM_TOKEN:
-        logger.critical(
-            'Отсутствует обязательная переменная '
-            'окружения: TELEGRAM_TOKEN = None.'
-        )
-        check_status = False
-    else:
-        logger.debug(f'Check tokens - TELEGRAM_TOKEN: {check_status}')
-
-    if not TELEGRAM_CHAT_ID:
-        logger.critical(
-            'Отсутствует обязательная переменная '
-            'окружения: TELEGRAM_CHAT_ID = None.'
-        )
-        check_status = False
-    else:
-        logger.debug(f'Check tokens - TELEGRAM_CHAT_ID: {check_status}')
-
-    logger.info(f'Check tokens: {check_status}')
-    return check_status
+        logger.info(f'Проверка завершена успешно: Статус: {check_status}')
 
 
 def send_message(bot: telegram.Bot, message: str) -> None:
@@ -107,11 +79,15 @@ def get_api_answer(timestamp: int) -> dict:
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
-    response: dict = {}
+    logger.info(
+        'Начата подготовка к запросу API, '
+        f'url - {ENDPOINT}, timestamp - {timestamp}'
+    )
 
     try:
-        logger.info(f'Отправляем запрос к API {ENDPOINT}')
         response: dict = requests.get(**request_params)
+        if response.status_code != 200:
+            
         if response.status_code == HTTPStatus.NOT_FOUND:
             logger.error(
                 'Сбой в работе программы: '
@@ -143,19 +119,16 @@ def get_api_answer(timestamp: int) -> dict:
         logger.error(error)
     else:
         logger.info('Получен ответ от API')
-        a = response.json()
-        print(f'{response.json()}\n\n, {type(a)}\n\n')
         return response.json()
 
 
-def check_response(response) -> bool:
+def check_response(response) -> None:
     """Check correct data in response."""
-    logger.debug('Проверка ответа от сервера')
+    logger.info('Проверка ответа от сервера')
 
     if not isinstance(response, dict):
         raise TypeError(
             'Тип ответа API не соответствует ожидаемому dict.'
-            f' Полученный тип: {type(response)}.'
         )
     if not isinstance(response.get('homeworks'), list):
         raise TypeError(
@@ -166,7 +139,6 @@ def check_response(response) -> bool:
             'Словарь полученный от API пуст.'
             f' Полученный ответ: {response}.'
         )
-
     if 'homeworks' not in response:
         raise HomeworkExistingKey(
             'Ответ API не содержит ключа "homeworks".'
@@ -178,13 +150,12 @@ def check_response(response) -> bool:
             'Ответ API не содержит ключа "current_date".'
             f' Полученный ответ: {response}.'
         )
-    logger.debug('Результат проверки: all good')
-    return True
+    logger.info('Результат проверки: all good')
 
 
 def parse_status(homework: dict) -> str:
     """Parse homework status. Return str to send."""
-    logger.debug('Старт проверки статуса')
+    logger.info('Старт проверки статуса')
 
     homework_name: str = homework.get('homework_name')
     homework_status: str = homework.get('status')
@@ -196,65 +167,56 @@ def parse_status(homework: dict) -> str:
 
     if homework_name is None:
         raise HomeworkStatusError(
-            f'Пустое имя домашней рабоыт {homework_name}'
+            f'Пустое имя домашней работы {homework_name}'
         )
-
+    if homework_status is None:
+        raise HomeworkStatusError(
+            f'Пустое имя домашней работы {homework_name}'
+        )
     if homework_status not in HOMEWORK_VERDICTS:
         raise HomeworkStatusError(
             f'Неизвестный статус домашней рабоыт {homework_status}'
         )
     verdict = HOMEWORK_VERDICTS[homework_status]
 
-    logger.debug(f'Проверка статуса завершена, вердикт - {verdict}')
+    logger.info(f'Проверка статуса завершена, вердикт - {verdict}')
 
     return f'Изменился статус проверки работы "{homework_name}": {verdict}'
 
 
 def main() -> None:
     """Main function."""
-    if not check_tokens():
-        sys.exit('Критическая ошибка. Отсутствуют переменные окружения.')
+    check_tokens()
 
     bot: telegram.bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    prev_report: dict = {
-        'name': '',
-        'output': ''
-    }
-    current_report: dict = {
-        'name': '',
-        'output': ''
-    }
+    homework_status: str = ''
     timestamp = int(time.time())
+    prev_error_message = ''
 
     while True:
         try:
+            send_message(bot, 'Работаю, тружусь, все хорошо')
             response: list = get_api_answer(timestamp)
+            check_response(response)
+            timestamp = response['current_date']
             homework = response.get('homeworks')
-            print(response)
-            if check_response(response) and homework:
+            if homework:
                 homework = response.get('homeworks')[0]
-                current_report = {
-                    'name': homework.get('homework_name'),
-                    'output': parse_status(homework)
-                }
-
-        except telegram.error.TelegramError as error:
-            logging.error(error)
+                if homework_status != parse_status(homework):
+                    homework_status = parse_status(homework)
+                    logging.info(
+                        'Подготовлено сообщение для отаравки:'
+                        f' {homework_status}'
+                    )
+                    send_message(bot, homework_status)
 
         except Exception as error:
-            logging.error(error)
-            error_message = f"Сбой в работе программы: {error}"
-            logging.exception(error_message)
-            send_message(bot, error_message)
+            error_message = f'Сбой в работе программы: {error}'
+            logger.error(error_message)
+            if prev_error_message != error_message:
+                send_message(bot, error_message)
+            prev_error_message = error_message
         finally:
-            if prev_report != current_report:
-                logging.info(
-                    'Подготовлено сообщение для отаравки:'
-                    f' {current_report["output"]}'
-                )
-                send_message(bot, current_report['output'])
-            prev_report = current_report.copy()
-
             time.sleep(RETRY_PERIOD)
 
 
