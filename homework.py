@@ -2,15 +2,13 @@ import logging
 import os
 import sys
 import time
-from http import HTTPStatus
 
 import requests
 import telegram
 from dotenv import load_dotenv
 
 from exeptions import (HomeworkExistingKey, HomeworkStatusError,
-                       HTTPStatusErrorBAD_REQUEST, HTTPStatusErrorNOT_FOUND,
-                       HTTPStatusErrorUNAUTHORIZED)
+                       HTTPStatusError, RequestError, ConnectionError)
 
 load_dotenv()
 
@@ -87,36 +85,15 @@ def get_api_answer(timestamp: int) -> dict:
     try:
         response: dict = requests.get(**request_params)
         if response.status_code != 200:
-            
-        if response.status_code == HTTPStatus.NOT_FOUND:
-            logger.error(
-                'Сбой в работе программы: '
-                f'Эндпоинт {ENDPOINT} недоступен. '
-                f'Код ответа API: {response.status_code}'
-            )
-            raise HTTPStatusErrorNOT_FOUND()
-        if response.status_code == HTTPStatus.BAD_REQUEST:
-            logger.error(
-                'Сбой в работе программы: '
-                f'Wrong from_date format. '
-                f'Код ответа API: {response.status_code}'
-            )
-            raise HTTPStatusErrorBAD_REQUEST()
-        if response.status_code == HTTPStatus.UNAUTHORIZED:
-            logger.error(
-                'Сбой в работе программы: '
-                f'Учетные данные не были предоставлены. '
-                f'Код ответа API: {response.status_code}'
-            )
-            raise HTTPStatusErrorUNAUTHORIZED()
-        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-            logger.error(
-                'Сбой в работе программы: '
-                f'Внутренняя ошибка сервера: {response.status_code}'
-            )
-            raise HTTPStatusErrorUNAUTHORIZED()
-    except requests.exceptions.RequestException as error:
-        logger.error(error)
+            raise HTTPStatusError(response.reason)
+    except requests.ConnectionError as error:
+        raise ConnectionError(f'Ошибка подключения - {error}')
+    except requests.RequestException as error:
+        raise RequestError(
+            'Ошибка в запросе, '
+            f'url {ENDPOINT}, '
+            f'timestamp {timestamp}, {error}'
+        )
     else:
         logger.info('Получен ответ от API')
         return response.json()

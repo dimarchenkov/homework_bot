@@ -10,19 +10,19 @@ class HomeworkExistingKey(Exception):
     pass
 
 
-class HTTPStatusErrorNOT_FOUND(Exception):
+class HTTPStatusError(Exception):
     """Bad HTTP response status."""
 
     pass
 
 
-class HTTPStatusErrorBAD_REQUEST(Exception):
+class RequestError(Exception):
     """Bad HTTP response status."""
 
     pass
 
 
-class HTTPStatusErrorUNAUTHORIZED(Exception):
+class ConnectionError(Exception):
     """Bad HTTP response status."""
 
     pass
