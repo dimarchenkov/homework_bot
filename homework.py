@@ -187,9 +187,9 @@ def main() -> None:
                     send_message(bot, homework_status)
             else:
                 logger.debug('Новые статусы отстутствуют')
-            error_status = False
+            error_status: bool = False
         except Exception as error:
-            error_message = logger.error(
+            error_message: str = logger.error(
                 f'Сбой в работе программы: {error}', exc_info=True
             )
             if not error_status:
