@@ -166,7 +166,7 @@ def main() -> None:
     check_tokens()
 
     bot: telegram.bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    homework_status: str = ''
+    last_message_sent: str = ''
     timestamp = int(time.time())
 
     while True:
@@ -178,23 +178,23 @@ def main() -> None:
             homework = response.get('homeworks')
             if homework:
                 homework = response.get('homeworks')[0]
-                if homework_status != parse_status(homework):
-                    homework_status = parse_status(homework)
+                if last_message_sent != parse_status(homework):
+                    last_message_sent = parse_status(homework)
                     logging.info(
-                        'Подготовлено сообщение для отаравки:'
-                        f' {homework_status}'
+                        'Подготовлено сообщение для отправки:'
+                        f' {last_message_sent}'
                     )
-                    send_message(bot, homework_status)
+                    send_message(bot, last_message_sent)
             else:
                 logger.debug('Новые статусы отстутствуют')
-            error_status: bool = False
         except Exception as error:
-            error_message: str = logger.error(
-                f'Сбой в работе программы: {error}', exc_info=True
+            error_message: str = (
+                f'Сбой в работе программы: {error}'
             )
-            if not error_status:
+            logger.error(error_message, exc_info=True)
+            if last_message_sent != error_message:
                 send_message(bot, error_message)
-                error_status = True
+                last_message_sent = error_message
         finally:
             time.sleep(RETRY_PERIOD)
 
